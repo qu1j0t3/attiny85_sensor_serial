@@ -4,3 +4,15 @@
 .vscode/launch.json
 .vscode/ipch
 .vscode
+.DS_Store
+.dep
+*.o
+*.eep
+*.elf
+*.hex
+*.i
+*.lss
+*.lst
+*.map
+*.s
+*.sym
