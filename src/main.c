@@ -29,9 +29,11 @@
 // PB1: MISO: SPI Host Data Input / Client Data Output
 // PB0: MOSI: SPI Host Data Output / Client Data Input
 
-#define SCD41_ADDRESS 0x62
+enum __attribute__ ((__packed__)) {
+   SCD41_ADDRESS = 0x62
+};
 
-char i2c_get_serial_number[] = {
+static char i2c_get_serial_number[] = {
    (SCD41_ADDRESS << 1) | 1, // ??? low bit 0 = master write, otherwise master read; see USI_I2C_Master_Transceiver_Start()
    0x36, 0x82
 };
