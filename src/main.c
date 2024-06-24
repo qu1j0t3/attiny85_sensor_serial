@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <stdint.h>
 
+#include "serial.h"
 #include "usi_i2c_master.h"
 
 /*
@@ -41,62 +42,6 @@ static char i2c_get_serial_number[] = {
 
 #define TOGGLE_LED() if(1){ PORTB ^= 0b10; }
 
-#define RXMASK 0b1000
-
-// N.B. clock is 16.5MHz
-//uint16_t d = 421; // for 9600. range 400..443. measured by testing - see serial_test()
-//uint16_t d = 3408; // for 1200. range 3231..3585. measured by testing - see serial_test(). computed
-//uint16_t d = 101; // for 38400. range 96..107 measured by testing
-uint16_t d = 30; // for 115200. range 29..31 measured by testing
-
-// It's possible to get a 3 cycle loop if k were 8 bits
-void delay4(uint16_t k) {
-   while(k--) { // 4 cycles per iteration?
-      __builtin_avr_nops(0);
-   }
-}
-
-#define SERIAL_LO() if(1){ PORTB &= ~RXMASK; }
-#define SERIAL_HI() if(1){ PORTB |= RXMASK; }
-
-void send(uint8_t b) {
-   SERIAL_LO(); // Start bit
-   delay4(d);
-
-   for(uint8_t i = 0; i < 8; ++i) {
-      if(b & 1) {
-         SERIAL_HI();
-      } else {
-         SERIAL_LO();
-      }
-      b >>= 1;
-      delay4(d);
-   }
-
-   SERIAL_HI(); // Stop bit
-   delay4(d);
-}
-
-void serial_delay_test() {
-   // try different values of delay to find the range that works
-   // on my Digispark Tiny, the working range is 201..222 inclusive.
-
-   for(;d < 40000;){ // 110 baud would be a bit time of 4 x 37500 cycles so this limit is safe
-      PORTB ^= 0b10; // toggle LED
-
-      send('.'); send('o'); send('O'); send('(');
-      send('0'+(d/1000));
-      send('0'+((d/100)%10));
-      send('0'+((d/10)%10));
-      send('0'+(d%10));
-      send(')');
-      send('\r'); send('\n');
-
-      ++d;
-      _delay_ms(500);
-   }
-}
-
 void serial_stream_test() {
    uint8_t jsf8(void);
 
@@ -121,11 +66,16 @@ int main() {
 
    char buf[9] = { (SCD41_ADDRESS << 1) | 0 /*read*/ };
 
-   //USI_I2C_Master_Start_Transmission(i2c_get_serial_number, sizeof(i2c_get_serial_number));
-
-   //USI_I2C_Master_Start_Transmission(buf, sizeof(buf));
+   //serial_delay_test();
 
    send('O'); send('K'); send('.'); send('\r'); send('\n');
+
+   serial_stream_test();
+
+   USI_I2C_Master_Start_Transmission(i2c_get_serial_number, sizeof(i2c_get_serial_number));
+
+   USI_I2C_Master_Start_Transmission(buf, sizeof(buf));
+
 
 #ifndef ARDUINO_avrdd
 #endif
