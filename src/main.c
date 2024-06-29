@@ -40,7 +40,9 @@ static char i2c_get_serial_number[] = {
    0x36, 0x82
 };
 
-#define TOGGLE_LED() if(1){ PORTB ^= 0b10; }
+void TOGGLE_LED() {
+   PINB |= 1 << PINB1;
+}
 
 void serial_stream_test() {
    uint8_t jsf8(void);
@@ -68,7 +70,7 @@ int main() {
 
    //serial_delay_test();
 
-   send('O'); send('K'); send('.'); send('\r'); send('\n');
+   sendstr("OK.\r\n");
 
    serial_stream_test();
 

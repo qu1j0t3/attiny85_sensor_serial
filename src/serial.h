@@ -1,14 +1,21 @@
-#ifndef __SERIAL_H__
-#define __SERIAL_H__
+#ifndef SERIAL_H_
+#define SERIAL_H_
 
 #include <avr/io.h>
 
 #define RXMASK 0b1000
 
-#define SERIAL_LO() if(1){ PORTB &= ~RXMASK; }
-#define SERIAL_HI() if(1){ PORTB |= RXMASK; }
+static inline void SERIAL_LO() {
+    PORTB &= ~RXMASK;
+}
+
+static inline void SERIAL_HI() {
+    PORTB |= RXMASK;
+}
 
 void send(uint8_t b);
+void sendstr(char *str);
 void serial_delay_test();
 
-#endif
+#endif // SERIAL_H_
+
