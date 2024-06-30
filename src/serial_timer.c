@@ -5,6 +5,20 @@
 
 #include "serial.h"
 
+/**
+ * @file
+ *
+ * Implementation of serial transmission (8-N-1) at any host supported rate,
+ * using Timer1 and an interrupt, allowing the main program to continue
+ * running during communication.
+ *
+ * This is the preferred serial implementation because it has relatively
+ * precise control of bit timing (within about 0.5%), especially at high speeds
+ * (230,400 bps is comfortably supported).
+ * A simple calibration step will tune this delay to the particular chip in use.
+ * Jitter in bit times is minimised as the interrupt is timer driven.
+ */
+
 enum {
     // States 0..7 indicate the data bit index (0 = LSB) that should
     // define the line level when the next timer interrupt occurs
@@ -25,17 +39,31 @@ volatile uint8_t data;
  */
 volatile uint8_t state = IDLE;
 
-// From table 12-5, Timer/Counter1 Prescale Select
-#define PRESCALE_BY_32 0b0110
-#define PRESCALE_BY_8  0b0100
-#define PRESCALE_BY_4  0b0011
+// From ATtiny25/45/85 [DATASHEET] page 89,
+// Table 12-5, Timer/Counter1 Prescale Select
+#define NO_PRESCALE      0b0001
+#define PRESCALE_BY_2    0b0010
+#define PRESCALE_BY_4    0b0011
+#define PRESCALE_BY_8    0b0100
+#define PRESCALE_BY_32   0b0110
+#define PRESCALE_BY_256  0b1001
+#define PRESCALE_BY_1024 0b1011
 
 
 void serial_timer_init() {
-    // run Timer1 in async mode, 64MHz clock source,
-    // for 115200 bps, this means 555.555 ticks per bit,
-    // and a /4 prescaler brings this to 138.888 counts per interrupt.
-    // for 9600 bps, a /32 prescaler results in 208.333 counts per interrupt.
+    // run Timer1 in async mode, 64MHz clock source.
+
+    // 300 bps:    /1024 prescale: Measured 202..223; mid 212
+    // 1200 bps:   /256 prescale: Measured 202..223; mid 212
+    // 9600 bps:   /32 prescale: Calculated delay is 207 (64M / 9600 / 32 - 1)
+    //             Measured delay on my TINY85 board: low 201, high 223. mid: 212
+    // 38400 bps:  /8 prescale: Calculated delay is 207 (64M / 38400 / 8 - 1)
+    //             Measured: 200..222; mid 211
+    // 115200 bps: /4 prescale: Calculated delay is 137 (64M / 115200 / 4 - 1)
+    //             Measured 131..144; mid 137
+    // 230400 bps: /2 prescale. Measured: 129..142; mid 135
+    // higher rates don't seem to be easily possible in OS X
+
 
     // "To set Timer/Counter1 in asynchronous mode
     //  first enable PLL and then wait 100 μs for PLL to stabilize.
@@ -56,20 +84,16 @@ void serial_timer_init() {
     //  This also applies to the Timer Output Compare flags
     //  and interrupts."
 
-    // PWM mode must be enabled for the Timer Interrupt
-    // to occur when timer reaches OCR1C.
-    TCCR1 = 0b01000000 | PRESCALE_BY_4;
+    // PWM mode must be enabled (set PWM1A):
+    TCCR1 = 0b01000000 | PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
     GTCCR = 0;
-    // 9600 bps: /32 prescale: Calculated delay is 207 (64M / 9600 / 32 - 1)
-    //           Measured delay on my TINY85 board: low 201, high 223. mid: 212
-    // 38400 bps: /8 prescale: Calculated delay is 207 (64M / 38400 / 8 - 1)
-    //            Measured: 200..222; mid 211
-    // 115200 bps: /4 prescale: Calculated delay is 137 (64M / 115200 / 4 - 1)
-    //             Measured 131..144; mid 137
-    OCR1C = 137;
+    OCR1C = 212; // CHANGE THIS TO TESTED TIMER LIMIT for given data rate
     TIMSK = 0b00000100; // TOIE1 (Timer/Counter1 Overflow) int enabled
 
-   sei();
+    state = IDLE;
+    SERIAL_HI();
+
+    sei();
 }
 
 ISR(TIMER1_OVF_vect) {
@@ -84,14 +108,12 @@ ISR(TIMER1_OVF_vect) {
         data >>= 1;
         ++state;
     }
-
-    //static uint8_t ctr;
-    //if (! ctr++) TOGGLE_LED();
 }
 
 /**
  * Spinwaits until serial line is idle, then begins
- * transmission of `c` as 8 bits, using Timer1.
+ * transmission of `c` as 8 bits. Function returns immediately,
+ * does not wait for transmission to occur.
  */
 void sendt(uint8_t c) {
     while (state != IDLE)
@@ -107,7 +129,7 @@ void sendt(uint8_t c) {
 void serial_timer_delay_test() {
    // try different values of delay to find the range that works
 
-   for(uint8_t d = 1;d;){
+   for(uint8_t d = 1; d; ++d){
       PORTB ^= 0b10; // toggle LED
 
       OCR1C = d; // Update timer interrupt frequency
@@ -119,8 +141,6 @@ void serial_timer_delay_test() {
       sendt('0'+(d%10));
       sendt(')');
       sendt('\r'); sendt('\n');
-
-      ++d;
    }
 }
 

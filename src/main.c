@@ -52,6 +52,12 @@ inline void TOGGLE_LED() {
 void serial_stream_test(void (*send_byte_func)(uint8_t)) {
    uint8_t jsf8(void);
 
+   send_byte_func('O');
+   send_byte_func('K');
+   send_byte_func('.');
+   send_byte_func('\r');
+   send_byte_func('\n');
+
    while(1) {
       for(uint8_t i = 16; i--;) {
          uint8_t b = jsf8();
