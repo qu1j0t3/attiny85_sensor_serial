@@ -90,23 +90,32 @@ int main() {
 
    char buf[9] = { (SCD41_ADDRESS << 1) | 0 /*read*/ };
 
-#if SERIAL_DELAY
-   //serial_delay_test();
-
-   sendstr("OK.\r\n");
-
-   serial_stream_test();
-#else
    serial_timer_init();
    //serial_timer_delay_test();
-   serial_stream_test(sendt);
-#endif
+   //serial_stream_test(sendt);
 
+    sendt('I');
+    sendt('2');
+    sendt('C');
+    sendt(':');
+    sendt('\r');
+    sendt('\n');
 
+while(1) {
    USI_I2C_Master_Start_Transmission(i2c_get_serial_number, sizeof(i2c_get_serial_number));
 
    USI_I2C_Master_Start_Transmission(buf, sizeof(buf));
 
+   for(uint8_t i = 0; i < sizeof(buf); ++i) {
+      sendt('0'+(buf[i]/100));
+      sendt('0'+((buf[i]/10)%10));
+      sendt('0'+(buf[i]%10));
+      sendt(',');
+   }
+    sendt('\r');
+    sendt('\n');
+    _delay_ms(1000);
+}
 
 #ifndef ARDUINO_avrdd
 #endif
