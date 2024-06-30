@@ -56,11 +56,13 @@ void serial_timer_init() {
     // 300 bps:    /1024 prescale: Measured 202..223; mid 212
     // 1200 bps:   /256 prescale: Measured 202..223; mid 212
     // 9600 bps:   /32 prescale: Calculated delay is 207 (64M / 9600 / 32 - 1)
-    //             Measured delay on my TINY85 board: low 201, high 223. mid: 212
+    //             Measured delay on my TINY85 board / Polulu serial: 201..223. mid: 212
+    //             Measured with TINY85 + PL2303 USB/serial: 204..226. mid: 215
     // 38400 bps:  /8 prescale: Calculated delay is 207 (64M / 38400 / 8 - 1)
     //             Measured: 200..222; mid 211
     // 115200 bps: /4 prescale: Calculated delay is 137 (64M / 115200 / 4 - 1)
     //             Measured 131..144; mid 137
+    //             Measured with TINY85 + PL2303 USB/serial: 133..148; mid 140
     // 230400 bps: /2 prescale. Measured: 129..142; mid 135
     // higher rates don't seem to be easily possible in OS X
 
@@ -143,5 +145,3 @@ void serial_timer_delay_test() {
       sendt('\r'); sendt('\n');
    }
 }
-
-

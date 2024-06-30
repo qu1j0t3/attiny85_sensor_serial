@@ -21,6 +21,15 @@
  ┃ R  Blk  W ┃  Sensirion
  ┃ -   G   - ┃  connections
  ┗━━━     ━━━┛
+
+ Header pins below carrier protoboard;
+ seen from top, with ISP header upwards
+
+ How to connect PL2303 USB adapter (flying leads, White, Black, Red, Green)
+ [NC] [NC] [NC] [White] [Black] [NC]
+ --
+ Corresponding to Polulu PGM03A ISP pins:
+ [A]  [B]  [TX] [RX]    [GND]   [VBUS (+5V)] ; "TX" & "RX" relative to host computer
  */
 
 // I/O Map
