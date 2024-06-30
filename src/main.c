@@ -40,23 +40,30 @@ static char i2c_get_serial_number[] = {
    0x36, 0x82
 };
 
-void TOGGLE_LED() {
+inline void TOGGLE_LED() {
    PINB |= 1 << PINB1;
 }
 
-void serial_stream_test() {
+/**
+ * Generates an endless stream of 8 bit random numbers,
+ * and prints character by character as ASCII lines of 16 numbers,
+ * using the provided function.
+ */
+void serial_stream_test(void (*send_byte_func)(uint8_t)) {
    uint8_t jsf8(void);
 
    while(1) {
       for(uint8_t i = 16; i--;) {
          uint8_t b = jsf8();
 
-         send('0'+(b/100));
-         send('0'+((b/10)%10));
-         send('0'+(b%10));
-         send(',');
+         send_byte_func('0'+(b/100));
+         send_byte_func('0'+((b/10)%10));
+         send_byte_func('0'+(b%10));
+         send_byte_func(',');
       }
-      send('\r'); send('\n');
+      send_byte_func('\r');
+      send_byte_func('\n');
+
       TOGGLE_LED();
    }
 }
@@ -68,11 +75,18 @@ int main() {
 
    char buf[9] = { (SCD41_ADDRESS << 1) | 0 /*read*/ };
 
+#if SERIAL_DELAY
    //serial_delay_test();
 
    sendstr("OK.\r\n");
 
    serial_stream_test();
+#else
+   serial_timer_init();
+   //serial_timer_delay_test();
+   serial_stream_test(sendt);
+#endif
+
 
    USI_I2C_Master_Start_Transmission(i2c_get_serial_number, sizeof(i2c_get_serial_number));
 

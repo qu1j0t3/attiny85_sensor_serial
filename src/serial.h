@@ -17,5 +17,11 @@ void send(uint8_t b);
 void sendstr(char *str);
 void serial_delay_test();
 
+void serial_timer_init();
+void serial_timer_delay_test();
+void sendt(uint8_t b);
+
+void TOGGLE_LED();
+
 #endif // SERIAL_H_
 
