@@ -1,8 +1,12 @@
 #include <avr/io.h>
+#include <util/delay.h>
 #include <stdint.h>
+//#include <stdlib.h>
+#include <stddef.h>
+
+#include <TinyWireM.h>
 
 #include "serial.h"
-#include "usi_i2c_master.h"
 
 /*
  ┏━━━━━━━━━━━┓
@@ -44,11 +48,6 @@ enum {
    SCD41_ADDRESS = 0x62
 };
 
-static char i2c_get_serial_number[] = {
-   (SCD41_ADDRESS << 1) | 1, // ??? low bit 0 = master write, otherwise master read; see USI_I2C_Master_Transceiver_Start()
-   0x36, 0x82
-};
-
 inline void TOGGLE_LED() {
    PINB |= 1 << PINB1;
 }
@@ -85,12 +84,11 @@ void serial_stream_test(void (*send_byte_func)(uint8_t)) {
 
 int main() {
    DDRB = 0b1010; // set serial RX and LED pin to output
-   SERIAL_HI(); // set line idle
-   _delay_ms(200);
-
-   char buf[9] = { (SCD41_ADDRESS << 1) | 0 /*read*/ };
 
    serial_timer_init();
+
+   //_delay_ms(200); // Wait a little bit before using serial output
+
    //serial_timer_delay_test();
    //serial_stream_test(sendt);
 
@@ -101,21 +99,32 @@ int main() {
     sendt('\r');
     sendt('\n');
 
-while(1) {
-   USI_I2C_Master_Start_Transmission(i2c_get_serial_number, sizeof(i2c_get_serial_number));
+    static USI_TWI TinyWireM; // N.B. We cannot use C++ `new` on AVR
 
-   USI_I2C_Master_Start_Transmission(buf, sizeof(buf));
+    TinyWireM.begin();
 
-   for(uint8_t i = 0; i < sizeof(buf); ++i) {
-      sendt('0'+(buf[i]/100));
-      sendt('0'+((buf[i]/10)%10));
-      sendt('0'+(buf[i]%10));
-      sendt(',');
+   while(1) {
+      TinyWireM.beginTransmission(SCD41_ADDRESS);
+      TinyWireM.send(0x36);
+      TinyWireM.send(0x82);
+      TinyWireM.endTransmission();
+
+      _delay_ms(2);
+
+      TinyWireM.requestFrom(SCD41_ADDRESS, sizeof(9));
+
+      for(uint8_t i = 0; i < 9; ++i) {
+         uint8_t b = TinyWireM.receive();          // get the temperature
+         sendt('0'+(b/100));
+         sendt('0'+((b/10)%10));
+         sendt('0'+(b%10));
+         sendt(',');
+      }
+      sendt('\r');
+      sendt('\n');
+
+      _delay_ms(1000);
    }
-    sendt('\r');
-    sendt('\n');
-    _delay_ms(1000);
-}
 
 #ifndef ARDUINO_avrdd
 #endif

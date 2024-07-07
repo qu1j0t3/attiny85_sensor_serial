@@ -30,25 +30,26 @@ enum {
 /**
  * The data byte being transmitted.
  */
-volatile uint8_t data;
+static volatile uint8_t data;
 
 /**
  * Represents the next "thing to do" when the timer interrupt
  * is serviced. E.g. state = 0 means "send bit zero (LSB) of
  * current data byte".
  */
-volatile uint8_t state = IDLE;
+static volatile uint8_t state = IDLE;
 
 // From ATtiny25/45/85 [DATASHEET] page 89,
 // Table 12-5, Timer/Counter1 Prescale Select
-#define NO_PRESCALE      0b0001
-#define PRESCALE_BY_2    0b0010
-#define PRESCALE_BY_4    0b0011
-#define PRESCALE_BY_8    0b0100
-#define PRESCALE_BY_32   0b0110
-#define PRESCALE_BY_256  0b1001
-#define PRESCALE_BY_1024 0b1011
-
+enum {
+    NO_PRESCALE      = 0b0001,
+    PRESCALE_BY_2    = 0b0010,
+    PRESCALE_BY_4    = 0b0011,
+    PRESCALE_BY_8    = 0b0100,
+    PRESCALE_BY_32   = 0b0110,
+    PRESCALE_BY_256  = 0b1001,
+    PRESCALE_BY_1024 = 0b1011
+};
 
 void serial_timer_init() {
     // run Timer1 in async mode, 64MHz clock source.
