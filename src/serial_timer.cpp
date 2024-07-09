@@ -133,6 +133,16 @@ void sendt(uint8_t c) {
     TIMSK |= 1 << TOIE1; // enable timer interrupt
 }
 
+/**
+ * Wait until serial communication is finished
+ * and line is idle. At this point the timer interrupt
+ * will be disabled.
+ */
+void flush_serial() {
+    while ((TIMSK & (1 << TOIE1)) && state != IDLE)
+        ;
+}
+
 void serial_timer_delay_test() {
    // try different values of delay to find the range that works
 
