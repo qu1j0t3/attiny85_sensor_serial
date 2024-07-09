@@ -87,11 +87,11 @@ void serial_timer_init() {
     //  This also applies to the Timer Output Compare flags
     //  and interrupts."
 
-    // PWM mode must be enabled (set PWM1A):
-    TCCR1 = 0b01000000 | PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
+    // PWM mode must be enabled:
+    TCCR1 = (1 << PWM1A) | PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
     GTCCR = 0;
     OCR1C = 212; // CHANGE THIS TO TESTED TIMER LIMIT for given data rate
-    TIMSK = 0b00000100; // TOIE1 (Timer/Counter1 Overflow) int enabled
+    TIMSK = 1 << TOIE1; // TOIE1 (Timer/Counter1 Overflow) int enabled
 
     state = IDLE;
     SERIAL_HI();
@@ -108,8 +108,10 @@ ISR(TIMER1_OVF_vect) {
     }
 
     if (state < IDLE) {
-        data >>= 1;
         ++state;
+        data >>= 1;
+    } else {
+        TIMSK &= ~(1 << TOIE1); // transmit done. disable timer interrupt
     }
 }
 
@@ -127,6 +129,8 @@ void sendt(uint8_t c) {
     // bits are sent LSB to MSB
     data = c;
     state = 0;
+
+    TIMSK |= 1 << TOIE1; // enable timer interrupt
 }
 
 void serial_timer_delay_test() {
