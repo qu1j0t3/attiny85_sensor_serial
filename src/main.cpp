@@ -64,9 +64,8 @@ inline void TOGGLE_LED() {
  * and prints character by character as ASCII lines of 16 numbers,
  * using the provided function.
  */
+extern "C" { uint8_t jsf8(void); }
 void serial_stream_test(void (*send_byte_func)(uint8_t)) {
-   uint8_t jsf8(void);
-
    send_byte_func('O');
    send_byte_func('K');
    send_byte_func('.');
