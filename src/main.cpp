@@ -45,11 +45,18 @@
 // PB0: sensor SDA
 
 enum {
+   //SDA_PIN = PINB0, // managed by USI TWI library
+   LED_PIN = PINB1,
+   //SCK_PIN = PINB2, // managed by USI TWI library
+   RX_PIN  = PINB3
+};// io_map;
+
+enum {
    SCD41_ADDRESS = 0x62
-};
+};// i2c_addresses;
 
 inline void TOGGLE_LED() {
-   PINB |= 1 << PINB1;
+   PINB |= 1 << LED_PIN;
 }
 
 /**
@@ -82,12 +89,34 @@ void serial_stream_test(void (*send_byte_func)(uint8_t)) {
    }
 }
 
+/* ------ From Sensirion datasheet, with optimisations for AVR */
+#define CRC8_POLYNOMIAL 0x31
+#define CRC8_INIT 0xff
+
+uint8_t sensirion_common_generate_crc(const uint8_t* data, uint8_t count) {
+   uint8_t current_byte;
+   uint8_t crc = CRC8_INIT;
+   uint8_t crc_bit;
+
+   /* calculates 8-Bit checksum with given polynomial */
+   for (current_byte = count; current_byte--;) {
+      crc ^= data[current_byte];
+      for (crc_bit = 8; crc_bit--;) {
+        uint8_t z = crc & 0x80 ? CRC8_POLYNOMIAL : 0;
+        crc = (crc << 1) ^ z;
+      }
+   }
+   return crc;
+}
+/* ------ ------ ------ ------ ------ ------ */
+
 int main() {
-   DDRB = 0b1010; // set serial RX and LED pin to output
+   // define outputs
+   DDRB = (1 << LED_PIN) | (1 << RX_PIN);
 
    serial_timer_init();
 
-   //_delay_ms(200); // Wait a little bit before using serial output
+   _delay_ms(200); // Wait a little bit before using serial output
 
    //serial_timer_delay_test();
    //serial_stream_test(sendt);
@@ -99,22 +128,29 @@ int main() {
     sendt('\r');
     sendt('\n');
 
-    static USI_TWI TinyWireM; // N.B. We cannot use C++ `new` on AVR
-
     TinyWireM.begin();
 
    while(1) {
       TinyWireM.beginTransmission(SCD41_ADDRESS);
       TinyWireM.send(0x36);
       TinyWireM.send(0x82);
-      TinyWireM.endTransmission();
+      uint8_t err = TinyWireM.endTransmission();
+
+    sendt('E');
+    sendt('T');
+    sendt(':');
+    sendt('0'+err/100);
+    sendt('0'+((err/10)%10));
+    sendt('0'+(err%10));
+    sendt('\r');
+    sendt('\n');
 
       _delay_ms(2);
 
-      TinyWireM.requestFrom(SCD41_ADDRESS, sizeof(9));
+      TinyWireM.requestFrom(SCD41_ADDRESS, 9);
 
       for(uint8_t i = 0; i < 9; ++i) {
-         uint8_t b = TinyWireM.receive();          // get the temperature
+         uint8_t b = TinyWireM.receive();
          sendt('0'+(b/100));
          sendt('0'+((b/10)%10));
          sendt('0'+(b%10));
