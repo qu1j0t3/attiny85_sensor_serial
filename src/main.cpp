@@ -157,7 +157,6 @@ int main() {
       }
       sendt('\r');
       sendt('\n');
-      flush_serial();
 
       _delay_ms(1000);
    }

@@ -19,12 +19,28 @@
  * Jitter in bit times is minimised as the interrupt is timer driven.
  */
 
+// If 1, then the timer interrupt will be enabled all the time.
+// If 0, then interrupt is only enabled as long as necessary (during serial transmission)
+#define INT_ALWAYS 0
+
 enum {
     // States 0..7 indicate the data bit index (0 = LSB) that should
     // define the line level when the next timer interrupt occurs
-    STOP_BIT = 8, // Timer interrupt will set line high
-    SENDING_STOP,
+    STOP_BIT = 8, // Next timer interrupt will set line high
+    SENDING_STOP, // Holds off any line change until the stop bit is complete
     IDLE // Indicates transmission is complete and line is ready for new transmission
+};
+
+// From ATtiny25/45/85 [DATASHEET] page 89,
+// Table 12-5, Timer/Counter1 Prescale Select
+enum {
+    NO_PRESCALE      = 0b0001,
+    PRESCALE_BY_2    = 0b0010,
+    PRESCALE_BY_4    = 0b0011,
+    PRESCALE_BY_8    = 0b0100,
+    PRESCALE_BY_32   = 0b0110,
+    PRESCALE_BY_256  = 0b1001,
+    PRESCALE_BY_1024 = 0b1011
 };
 
 /**
@@ -39,34 +55,25 @@ static volatile uint8_t data;
  */
 static volatile uint8_t state = IDLE;
 
-// From ATtiny25/45/85 [DATASHEET] page 89,
-// Table 12-5, Timer/Counter1 Prescale Select
-enum {
-    NO_PRESCALE      = 0b0001,
-    PRESCALE_BY_2    = 0b0010,
-    PRESCALE_BY_4    = 0b0011,
-    PRESCALE_BY_8    = 0b0100,
-    PRESCALE_BY_32   = 0b0110,
-    PRESCALE_BY_256  = 0b1001,
-    PRESCALE_BY_1024 = 0b1011
-};
+// Example measured timer settings using my Digispark and serial interface:
+//
+//        Bps   Prescale           Timer
+//     ------   ----------------   -----
+//        300   PRESCALE_BY_1024   212
+//       1200   PRESCALE_BY_256    212
+//       9600   PRESCALE_BY_32     214
+//      38400   PRESCALE_BY_8      211
+//     115200   PRESCALE_BY_4      137
+//     230400   PRESCALE_BY_2      135
+//
+// Calibration is done by running "chirp" test (serial_timer_delay_test()),
+// and taking midpoint of first and last uncorrupted timer values received.
+
+static uint8_t prescale = PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
+static uint8_t divider = 214; // CHANGE THIS TO TESTED TIMER LIMIT for desired data rate
 
 void serial_timer_init() {
     // run Timer1 in async mode, 64MHz clock source.
-
-    // 300 bps:    /1024 prescale: Measured 202..223; mid 212
-    // 1200 bps:   /256 prescale: Measured 202..223; mid 212
-    // 9600 bps:   /32 prescale: Calculated delay is 207 (64M / 9600 / 32 - 1)
-    //             Measured delay on my TINY85 board / Polulu serial: 201..223. mid: 212
-    //             Measured with TINY85 + PL2303 USB/serial: 204..226. mid: 215
-    // 38400 bps:  /8 prescale: Calculated delay is 207 (64M / 38400 / 8 - 1)
-    //             Measured: 200..222; mid 211
-    // 115200 bps: /4 prescale: Calculated delay is 137 (64M / 115200 / 4 - 1)
-    //             Measured 131..144; mid 137
-    //             Measured with TINY85 + PL2303 USB/serial: 133..148; mid 140
-    // 230400 bps: /2 prescale. Measured: 129..142; mid 135
-    // higher rates don't seem to be easily possible in OS X
-
 
     // "To set Timer/Counter1 in asynchronous mode
     //  first enable PLL and then wait 100 μs for PLL to stabilize.
@@ -79,22 +86,14 @@ void serial_timer_init() {
         ; // wait until PLOCK set
     PLLCSR |= 0b100; // set PCKE (PCK Enable)
 
-    // "In PWM mode, the Timer Overflow Flag - TOV1 is set
-    //  when the TCNT1 counts to the OCR1C value
-    //  and the TCNT1 is reset to $00. The Timer Overflow Interrupt1
-    //  is executed when TOV1 is set provided that Timer Overflow
-    //  Interrupt and global interrupts are enabled.
-    //  This also applies to the Timer Output Compare flags
-    //  and interrupts."
-
-    // PWM mode must be enabled:
-    TCCR1 = (1 << PWM1A) | PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
+    TCCR1 = (1 << PWM1A) | prescale;
     GTCCR = 0;
-    OCR1C = 212; // CHANGE THIS TO TESTED TIMER LIMIT for given data rate
-    TIMSK = 1 << TOIE1; // TOIE1 (Timer/Counter1 Overflow) int enabled
+    OCR1C = divider;
 
     state = IDLE;
     SERIAL_HI();
+
+    TIMSK = INT_ALWAYS*(1 << TOIE1); // Timer/Counter1 Overflow interrupt
 
     sei();
 }
@@ -110,27 +109,9 @@ ISR(TIMER1_OVF_vect) {
     if (state < IDLE) {
         ++state;
         data >>= 1;
-    } else {
+    } else if (! INT_ALWAYS) {
         TIMSK &= ~(1 << TOIE1); // transmit done. disable timer interrupt
     }
-}
-
-/**
- * Spinwaits until serial line is idle, then begins
- * transmission of `c` as 8 bits. Function returns immediately,
- * does not wait for transmission to occur.
- */
-void sendt(uint8_t c) {
-    while (state != IDLE)
-        ;
-
-    TCNT1 = 0; // start counting
-    SERIAL_LO(); // start bit
-    // bits are sent LSB to MSB
-    data = c;
-    state = 0;
-
-    TIMSK |= 1 << TOIE1; // enable timer interrupt
 }
 
 /**
@@ -139,24 +120,41 @@ void sendt(uint8_t c) {
  * will be disabled.
  */
 void flush_serial() {
-    while ((TIMSK & (1 << TOIE1)) && state != IDLE)
+    while (/*(TIMSK & (1 << TOIE1)) &&*/ state != IDLE)
         ;
+}
+
+/**
+ * Spinwaits until serial line is idle, then begins
+ * transmission of `c` as 8 bits. Function returns immediately,
+ * does not wait for transmission to occur.
+ */
+void sendt(uint8_t c) {
+    flush_serial();
+
+    TCNT1 = 0;   // start counting
+    SERIAL_LO(); // begin the start bit
+    data = c;    // bits of `data` follow,
+    state = 0;   // bit zero is next
+
+    if (! INT_ALWAYS) TIMSK |= 1 << TOIE1; // enable timer interrupt
 }
 
 void serial_timer_delay_test() {
    // try different values of delay to find the range that works
 
    for(uint8_t d = 1; d; ++d){
-      PORTB ^= 0b10; // toggle LED
+      TOGGLE_LED();
 
       OCR1C = d; // Update timer interrupt frequency
 
       sendt('.'); sendt('o'); sendt('O'); sendt('(');
-      sendt('0'+(d/1000));
       sendt('0'+((d/100)%10));
       sendt('0'+((d/10)%10));
       sendt('0'+(d%10));
       sendt(')');
       sendt('\r'); sendt('\n');
    }
+
+   OCR1C = divider; // reset to configured value
 }
