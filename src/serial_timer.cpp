@@ -21,7 +21,8 @@
 
 // If 1, then the timer interrupt will be enabled all the time.
 // If 0, then interrupt is only enabled as long as necessary (during serial transmission)
-#define INT_ALWAYS 0
+//       -- this mode is buggy, results in garbled serial output, not clear why (FIXME)
+#define INT_ALWAYS 1
 
 enum {
     // States 0..7 indicate the data bit index (0 = LSB) that should
@@ -128,6 +129,11 @@ void flush_serial() {
  * Spinwaits until serial line is idle, then begins
  * transmission of `c` as 8 bits. Function returns immediately,
  * does not wait for transmission to occur.
+ *
+ * TODO: Using this function only allows limited concurrency (after calling sendt(),
+ *       main program will block at the next call to sendt(), until first is done).
+ *       Need to implement a buffer that can be filled at once and consumed by ISR,
+ *       so that the main program continues during the entire buffer transmission.
  */
 void sendt(uint8_t c) {
     flush_serial();
