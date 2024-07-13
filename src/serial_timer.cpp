@@ -19,7 +19,7 @@
  * Jitter in bit times is minimised as the interrupt is timer driven.
  */
 
-// If 1, then the timer interrupt will be enabled all the time.
+// If 1, then the timer interrupt will always be enabled
 // If 0, then interrupt is only enabled as long as necessary (during serial transmission)
 //       -- this mode is buggy, results in garbled serial output, not clear why (FIXME)
 #define INT_ALWAYS 1
@@ -70,8 +70,17 @@ static volatile uint8_t state = IDLE;
 // Calibration is done by running "chirp" test (serial_timer_delay_test()),
 // and taking midpoint of first and last uncorrupted timer values received.
 
-static uint8_t prescale = PRESCALE_BY_32; // CHANGE THIS TO CORRECT PRESCALER for desired data rate
-static uint8_t divider = 214; // CHANGE THIS TO TESTED TIMER LIMIT for desired data rate
+/**
+ * Set to correct prescale ratio for the desired baud rate
+ * according to calibration test.
+ */
+static const uint8_t prescale = PRESCALE_BY_32;
+
+/**
+ * Set to timer count for the desired baud rate
+ * according to calibration test.
+ */
+static const uint8_t divider = 214;
 
 void serial_timer_init() {
     // run Timer1 in async mode, 64MHz clock source.
@@ -81,11 +90,14 @@ void serial_timer_init() {
     //  Next, poll the PLOCK bit until it is set
     //  and then set the PCKE bit."
 
-    PLLCSR = 0b00000010; // enable PLL in async high speed mode (64MHz)
+    PLLCSR = 1 << PLLE; // enable PLL in async high speed mode (64MHz)
+
     _delay_us(100);
-    while(!(PLLCSR & 1))
-        ; // wait until PLOCK set
-    PLLCSR |= 0b100; // set PCKE (PCK Enable)
+
+    while(!(PLLCSR & (1 << PLOCK)))
+        ; // wait until PLL is locked
+
+    PLLCSR |= 1 << PCKE;
 
     TCCR1 = (1 << PWM1A) | prescale;
     GTCCR = 0;

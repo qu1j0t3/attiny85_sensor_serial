@@ -1,6 +1,9 @@
 #include <stdint.h>
 
-#define rot8(x,k) (((x) << (k))|((x) >> (8 - (k))))
+inline uint8_t rot8(uint8_t x, uint8_t k) {
+    return (x << k)|(x >> (8 - k));
+}
+
 uint8_t jsf8(void) {
 	static uint8_t a = 0xf1;
 	static uint8_t b = 0xee, c = 0xee, d = 0xee;

@@ -16,8 +16,8 @@
  See: https://www.pololu.com/docs/0J36/all
  1:       = MISO        = Target pin 1
  2: Red   = Target VDD 5V
- 3: Green = SCK         = pin 2
- 4: Black = MOSI/SDA    = pin 0
+ 3: Green = SCK         = Target pin 2
+ 4: Black = MOSI/SDA    = Target pin 0
  5:       = _RST = pin 5
  6: White = GND
 
