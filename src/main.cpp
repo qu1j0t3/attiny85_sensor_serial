@@ -52,7 +52,10 @@ enum {
 };// io_map;
 
 enum {
-   SCD41_ADDRESS = 0x62
+   SCD41_ADDRESS = 0x62,
+   // Note TC74 part # : TC74XX-YYZAA
+   //    where XX is the address code, e.g. A0 = 0b1001000
+   TC74_ADDRESS = 0b1001000
 };// i2c_addresses;
 
 inline void TOGGLE_LED() {
@@ -109,6 +112,17 @@ uint8_t sensirion_common_generate_crc(const uint8_t* data, uint8_t count) {
 }
 /* ------ ------ ------ ------ ------ ------ */
 
+void send_error(char marker, uint8_t err) {
+    sendt('E');
+    sendt(marker);
+    sendt(':');
+    sendt('0'+err/100);
+    sendt('0'+((err/10)%10));
+    sendt('0'+(err%10));
+    sendt('\r');
+    sendt('\n');
+}
+
 int main() {
    // define outputs
    DDRB = (1 << LED_PIN) | (1 << RX_PIN);
@@ -130,20 +144,59 @@ int main() {
     TinyWireM.begin();
 
    while(1) {
+    /*
       TinyWireM.beginTransmission(SCD41_ADDRESS);
       TinyWireM.send(0x36);
       TinyWireM.send(0x82);
+      */
+
+      TinyWireM.beginTransmission(a);
+      TinyWireM.send(0x01); // RWCR Read/Write Configuration
       uint8_t err = TinyWireM.endTransmission();
+      send_error('1', err);
 
-    sendt('E');
-    sendt('T');
-    sendt(':');
-    sendt('0'+err/100);
-    sendt('0'+((err/10)%10));
-    sendt('0'+(err%10));
-    sendt('\r');
-    sendt('\n');
+      if (err) {
+        _delay_ms(100);
+        ++a;
+        continue;
+      } else {
+        send_error('A', a);
+        break;
+      }
 
+      uint8_t err2 = TinyWireM.requestFrom(a, 1);
+      send_error('2', err2);
+
+      if (err) continue;
+
+      uint8_t config = TinyWireM.receive();
+
+      sendt(config & (1<<6) ? 'R' : 'N');
+      sendt(' ');
+
+      if (config & (1<<6)) {
+        TinyWireM.beginTransmission(a);
+        TinyWireM.send(0x00); // RWCR Read/Write Configuration
+        uint8_t err = TinyWireM.endTransmission();
+
+        send_error('3', err);
+
+        uint8_t err2 = TinyWireM.requestFrom(a, 1);
+        send_error('4', err2);
+
+        if (err) continue;
+
+        uint8_t temp = TinyWireM.receive();
+
+        sendt('T');
+        sendt('0'+temp/100);
+        sendt('0'+((temp/10)%10));
+        sendt('0'+(temp%10));
+        sendt('\r');
+        sendt('\n');
+      }
+
+/*
       _delay_ms(2);
 
       TinyWireM.requestFrom(SCD41_ADDRESS, 9);
@@ -157,7 +210,7 @@ int main() {
       }
       sendt('\r');
       sendt('\n');
-
+*/
       _delay_ms(1000);
    }
 

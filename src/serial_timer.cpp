@@ -58,7 +58,7 @@ static volatile uint8_t state = IDLE;
 
 // Example measured timer settings using my Digispark and serial interface:
 //
-//        Bps   Prescale           Timer
+//        Bps   Prescale           Count
 //     ------   ----------------   -----
 //        300   PRESCALE_BY_1024   212
 //       1200   PRESCALE_BY_256    212
@@ -80,7 +80,7 @@ static const uint8_t prescale = PRESCALE_BY_32;
  * Set to timer count for the desired baud rate
  * according to calibration test.
  */
-static const uint8_t divider = 214;
+static const uint8_t count = 214;
 
 void serial_timer_init() {
     // run Timer1 in async mode, 64MHz clock source.
@@ -101,7 +101,7 @@ void serial_timer_init() {
 
     TCCR1 = (1 << PWM1A) | prescale;
     GTCCR = 0;
-    OCR1C = divider;
+    OCR1C = count;
 
     state = IDLE;
     SERIAL_HI();
@@ -112,14 +112,14 @@ void serial_timer_init() {
 }
 
 ISR(TIMER1_OVF_vect) {
-    // Transmit the stop bit or next data bit
-    if (state >= STOP_BIT || (data & 1)) {
-        SERIAL_HI();
-    } else {
-        SERIAL_LO();
-    }
-
     if (state < IDLE) {
+        // Transmit the stop bit or next data bit
+        if (state >= STOP_BIT || (data & 1)) {
+            SERIAL_HI();
+        } else {
+            SERIAL_LO();
+        }
+
         ++state;
         data >>= 1;
     } else if (! INT_ALWAYS) {
@@ -150,7 +150,7 @@ void flush_serial() {
 void sendt(uint8_t c) {
     flush_serial();
 
-    TCNT1 = 0;   // start counting
+    TCNT1 = 0;   // start counting a full bit interval
     SERIAL_LO(); // begin the start bit
     data = c;    // bits of `data` follow,
     state = 0;   // bit zero is next
@@ -174,5 +174,5 @@ void serial_timer_delay_test() {
       sendt('\r'); sendt('\n');
    }
 
-   OCR1C = divider; // reset to configured value
+   OCR1C = count; // reset to configured value
 }
