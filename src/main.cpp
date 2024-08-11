@@ -58,6 +58,17 @@ enum {
    TC74_ADDRESS = 0b1001000
 };// i2c_addresses;
 
+enum {
+  TC74_RTR_COMMAND = 0,
+  TC74_RWCR_COMMAND
+};
+
+enum {
+   TC74_NORMAL_MODE = 0,
+   TC74_STANDBY_MODE = 1<<7, // bit written to CR
+   TC74_DATA_READY = 1<<6 // bit read from CR
+};
+
 inline void TOGGLE_LED() {
    PINB |= 1 << LED_PIN;
 }
@@ -112,8 +123,7 @@ uint8_t sensirion_common_generate_crc(const uint8_t* data, uint8_t count) {
 }
 /* ------ ------ ------ ------ ------ ------ */
 
-void send_error(char marker, uint8_t err) {
-    sendt('E');
+void sendnum(char marker, uint8_t err) {
     sendt(marker);
     sendt(':');
     sendt('0'+err/100);
@@ -124,6 +134,8 @@ void send_error(char marker, uint8_t err) {
 }
 
 int main() {
+   uint8_t tick = 0;
+
    // define outputs
    DDRB = (1 << LED_PIN) | (1 << RX_PIN);
 
@@ -144,47 +156,40 @@ int main() {
     TinyWireM.begin();
 
    while(1) {
+      _delay_ms(1000);
+      sendnum('*', tick++);
     /*
       TinyWireM.beginTransmission(SCD41_ADDRESS);
       TinyWireM.send(0x36);
       TinyWireM.send(0x82);
       */
 
-      TinyWireM.beginTransmission(a);
-      TinyWireM.send(0x01); // RWCR Read/Write Configuration
+      TinyWireM.beginTransmission(TC74_ADDRESS);
+      TinyWireM.send(TC74_RWCR_COMMAND); // RWCR Read/Write Configuration
       uint8_t err = TinyWireM.endTransmission();
-      send_error('1', err);
-
-      if (err) {
-        _delay_ms(100);
-        ++a;
-        continue;
-      } else {
-        send_error('A', a);
-        break;
-      }
-
-      uint8_t err2 = TinyWireM.requestFrom(a, 1);
-      send_error('2', err2);
+      sendnum('1', err);
 
       if (err) continue;
 
+      uint8_t err2 = TinyWireM.requestFrom(TC74_ADDRESS, 1);
+      sendnum('2', err2);
+
       uint8_t config = TinyWireM.receive();
 
-      sendt(config & (1<<6) ? 'R' : 'N');
+      sendt(config & TC74_DATA_READY ? 'R' : 'N');
       sendt(' ');
 
-      if (config & (1<<6)) {
-        TinyWireM.beginTransmission(a);
-        TinyWireM.send(0x00); // RWCR Read/Write Configuration
+      if (config & TC74_DATA_READY) {
+        TinyWireM.beginTransmission(TC74_ADDRESS);
+        TinyWireM.send(TC74_RTR_COMMAND); // Read Temperature Register
         uint8_t err = TinyWireM.endTransmission();
 
-        send_error('3', err);
-
-        uint8_t err2 = TinyWireM.requestFrom(a, 1);
-        send_error('4', err2);
+        sendnum('3', err);
 
         if (err) continue;
+
+        uint8_t err2 = TinyWireM.requestFrom(TC74_ADDRESS, 1);
+        sendnum('4', err2);
 
         uint8_t temp = TinyWireM.receive();
 
@@ -211,9 +216,6 @@ int main() {
       sendt('\r');
       sendt('\n');
 */
-      _delay_ms(1000);
    }
 
-#ifndef ARDUINO_avrdd
-#endif
 }
