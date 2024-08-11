@@ -8,6 +8,10 @@
 
 #include "serial.h"
 
+extern "C" {
+  #include "fleury_i2cmaster/i2cmaster.h"
+};
+
 /*
  ┏━━━━━━━━━━━┓
  ┃ 2   4   6 ┃  ISP header socket
@@ -134,8 +138,6 @@ void sendnum(char marker, uint8_t err) {
 }
 
 int main() {
-   uint8_t tick = 0;
-
    // define outputs
    DDRB = (1 << LED_PIN) | (1 << RX_PIN);
 
@@ -146,6 +148,8 @@ int main() {
    //serial_timer_delay_test();
    //serial_stream_test(sendt);
 
+    i2c_init();
+
     sendt('I');
     sendt('2');
     sendt('C');
@@ -153,69 +157,52 @@ int main() {
     sendt('\r');
     sendt('\n');
 
-    TinyWireM.begin();
+   uint8_t cr, temp;
+   uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
 
-   while(1) {
-      _delay_ms(1000);
-      sendnum('*', tick++);
-    /*
-      TinyWireM.beginTransmission(SCD41_ADDRESS);
-      TinyWireM.send(0x36);
-      TinyWireM.send(0x82);
-      */
-
-      TinyWireM.beginTransmission(TC74_ADDRESS);
-      TinyWireM.send(TC74_RWCR_COMMAND); // RWCR Read/Write Configuration
-      uint8_t err = TinyWireM.endTransmission();
-      sendnum('1', err);
-
-      if (err) continue;
-
-      uint8_t err2 = TinyWireM.requestFrom(TC74_ADDRESS, 1);
-      sendnum('2', err2);
-
-      uint8_t config = TinyWireM.receive();
-
-      sendt(config & TC74_DATA_READY ? 'R' : 'N');
-      sendt(' ');
-
-      if (config & TC74_DATA_READY) {
-        TinyWireM.beginTransmission(TC74_ADDRESS);
-        TinyWireM.send(TC74_RTR_COMMAND); // Read Temperature Register
-        uint8_t err = TinyWireM.endTransmission();
-
-        sendnum('3', err);
-
-        if (err) continue;
-
-        uint8_t err2 = TinyWireM.requestFrom(TC74_ADDRESS, 1);
-        sendnum('4', err2);
-
-        uint8_t temp = TinyWireM.receive();
-
-        sendt('T');
-        sendt('0'+temp/100);
-        sendt('0'+((temp/10)%10));
-        sendt('0'+(temp%10));
-        sendt('\r');
-        sendt('\n');
-      }
-
-/*
-      _delay_ms(2);
-
-      TinyWireM.requestFrom(SCD41_ADDRESS, 9);
-
-      for(uint8_t i = 0; i < 9; ++i) {
-         uint8_t b = TinyWireM.receive();
-         sendt('0'+(b/100));
-         sendt('0'+((b/10)%10));
-         sendt('0'+(b%10));
-         sendt(',');
-      }
-      sendt('\r');
-      sendt('\n');
-*/
+   if ( ret ) { // failed to issue start condition, possibly no device found
+      sendnum('A', ret);
+   } else {// issuing start condition ok, device accessible
+      i2c_write(TC74_RWCR_COMMAND);
+      i2c_write(TC74_NORMAL_MODE); // turn off Standby mode
    }
+
+   i2c_stop();
+
+    for(uint8_t tick = 0; ; ++tick) {
+        uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
+
+        if ( ret ) { // failed to issue start condition, possibly no device found
+            i2c_stop();
+            sendnum('B', ret);
+        } else {// issuing start condition ok, device accessible
+            i2c_write(TC74_RWCR_COMMAND);
+            i2c_stop();
+
+            i2c_start((TC74_ADDRESS << 1) | I2C_READ);     // set device address and write mode
+            cr = i2c_readNak();                    // read one byte
+            i2c_stop();
+
+         if (cr & TC74_DATA_READY) {
+               uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
+
+               if ( ret ) { // failed to issue start condition, possibly no device found
+                     i2c_stop();
+                     sendnum('C', ret);
+               } else {// issuing start condition ok, device accessible
+                     i2c_write(TC74_RTR_COMMAND);
+                     i2c_stop();
+
+                     i2c_start((TC74_ADDRESS << 1) | I2C_READ);     // set device address and write mode
+                     temp = i2c_readNak();                    // read one byte
+                     i2c_stop();
+
+                     sendnum('T', temp);
+               }
+            }
+         }
+
+        _delay_ms(1000);
+    }
 
 }
