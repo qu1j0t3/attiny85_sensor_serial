@@ -158,6 +158,16 @@ void sendt(uint8_t c) {
     if (! INT_ALWAYS) TIMSK |= 1 << TOIE1; // enable timer interrupt
 }
 
+void sendnum(char marker, uint8_t err) {
+    sendt(marker);
+    sendt(':');
+    sendt('0'+err/100);
+    sendt('0'+((err/10)%10));
+    sendt('0'+(err%10));
+    sendt('\r');
+    sendt('\n');
+}
+
 void serial_timer_delay_test() {
    // try different values of delay to find the range that works
 

@@ -4,13 +4,11 @@
 //#include <stdlib.h>
 #include <stddef.h>
 
-#include <TinyWireM.h>
-
+#include "fleury_i2cmaster/i2cmaster.h"
 #include "serial.h"
 
-extern "C" {
-  #include "fleury_i2cmaster/i2cmaster.h"
-};
+void tc74_temp();
+uint8_t jsf8(void);
 
 /*
  ┏━━━━━━━━━━━┓
@@ -56,22 +54,8 @@ enum {
 };// io_map;
 
 enum {
-   SCD41_ADDRESS = 0x62,
-   // Note TC74 part # : TC74XX-YYZAA
-   //    where XX is the address code, e.g. A0 = 0b1001000
-   TC74_ADDRESS = 0b1001000
+   SCD41_ADDRESS = 0x62
 };// i2c_addresses;
-
-enum {
-  TC74_RTR_COMMAND = 0,
-  TC74_RWCR_COMMAND
-};
-
-enum {
-   TC74_NORMAL_MODE = 0,
-   TC74_STANDBY_MODE = 1<<7, // bit written to CR
-   TC74_DATA_READY = 1<<6 // bit read from CR
-};
 
 inline void TOGGLE_LED() {
    PINB |= 1 << LED_PIN;
@@ -82,7 +66,6 @@ inline void TOGGLE_LED() {
  * and prints character by character as ASCII lines of 16 numbers,
  * using the provided function.
  */
-extern "C" { uint8_t jsf8(void); }
 void serial_stream_test(void (*send_byte_func)(uint8_t)) {
    send_byte_func('O');
    send_byte_func('K');
@@ -127,16 +110,6 @@ uint8_t sensirion_common_generate_crc(const uint8_t* data, uint8_t count) {
 }
 /* ------ ------ ------ ------ ------ ------ */
 
-void sendnum(char marker, uint8_t err) {
-    sendt(marker);
-    sendt(':');
-    sendt('0'+err/100);
-    sendt('0'+((err/10)%10));
-    sendt('0'+(err%10));
-    sendt('\r');
-    sendt('\n');
-}
-
 int main() {
    // define outputs
    DDRB = (1 << LED_PIN) | (1 << RX_PIN);
@@ -157,51 +130,8 @@ int main() {
     sendt('\r');
     sendt('\n');
 
-   uint8_t cr, temp;
-   uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
-
-   if ( ret ) { // failed to issue start condition, possibly no device found
-      sendnum('A', ret);
-   } else {// issuing start condition ok, device accessible
-      i2c_write(TC74_RWCR_COMMAND);
-      i2c_write(TC74_NORMAL_MODE); // turn off Standby mode
-   }
-
-   i2c_stop();
-
     for(uint8_t tick = 0; ; ++tick) {
-        uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
-
-        if ( ret ) { // failed to issue start condition, possibly no device found
-            i2c_stop();
-            sendnum('B', ret);
-        } else {// issuing start condition ok, device accessible
-            i2c_write(TC74_RWCR_COMMAND);
-            i2c_stop();
-
-            i2c_start((TC74_ADDRESS << 1) | I2C_READ);     // set device address and write mode
-            cr = i2c_readNak();                    // read one byte
-            i2c_stop();
-
-         if (cr & TC74_DATA_READY) {
-               uint8_t ret = i2c_start((TC74_ADDRESS << 1) | I2C_WRITE);       // set device address and write mode
-
-               if ( ret ) { // failed to issue start condition, possibly no device found
-                     i2c_stop();
-                     sendnum('C', ret);
-               } else {// issuing start condition ok, device accessible
-                     i2c_write(TC74_RTR_COMMAND);
-                     i2c_stop();
-
-                     i2c_start((TC74_ADDRESS << 1) | I2C_READ);     // set device address and write mode
-                     temp = i2c_readNak();                    // read one byte
-                     i2c_stop();
-
-                     sendnum('T', temp);
-               }
-            }
-         }
-
+         tc74_temp();
         _delay_ms(1000);
     }
 

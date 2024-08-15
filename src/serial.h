@@ -20,6 +20,7 @@ void serial_delay_test();
 void serial_timer_init();
 void serial_timer_delay_test();
 void sendt(uint8_t b);
+void sendnum(char marker, uint8_t err);
 void flush_serial();
 
 void TOGGLE_LED();
